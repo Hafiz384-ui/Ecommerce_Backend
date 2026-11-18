@@ -83,7 +83,7 @@ module.exports.loginUser = async (req, res) => {
           httpOnly: true,
           secure: true,
           sameSite: "strict",
-          maxAge:  7 * 24 * 60 * 60 * 1000
+          maaxAge:  7 * 24 * 60 * 60 * 1000
         });
         res.status(200).json({ message: "Login successful", token, user });
       } else {

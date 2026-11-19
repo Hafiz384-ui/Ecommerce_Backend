@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
-const isLoggedIn = require("../middlewares/isLoggedIn")
-const couponCodeModel = require("../models/coupon-code")
-const userModel = require("../models/user")
+const isLoggedIn = require("../middlewares/isLoggedIn");
+const validate = require("../middlewares/validate");
 const { checkRole } = require("../middlewares/roleBaseAccess");
+const { createCouponSchema, applyCouponSchema } = require("../validators/couponValidator");
 const { createCoupon, myCoupons, applyCoupon } = require("../controllers/couponController");
 
-router.post("/createcoupon",isLoggedIn , checkRole(['admin']), createCoupon);
+router.post("/createcoupon", isLoggedIn, checkRole(['admin']), validate(createCouponSchema), createCoupon);
 
 router.get("/mycoupons", isLoggedIn, myCoupons);
 
-router.post("/applycoupon", isLoggedIn, applyCoupon);
+router.post("/applycoupon", isLoggedIn, validate(applyCouponSchema), applyCoupon);
 
 module.exports = router;
+

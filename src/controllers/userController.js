@@ -4,15 +4,13 @@ const generateToken = require("../utils/generateToken");
 
 module.exports.createAdmin = async function (req, res) {
   try {
-    let { username, email, password, role } = req.body;
-    if (!username || !email || !password || !role) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { username, email, password, role } = req.validatedBody || req.body;
+
     let admin = await userModel.find({ role: "admin" });
     console.log("Creating admin user", admin.length);
     if (admin.length > 0) {
       return res
-        .status(504)
+        .status(403)
         .send("You don't have permission to create a new owner.");
     }
     const salt = await bcrypt.genSalt(10);
@@ -36,29 +34,30 @@ module.exports.createAdmin = async function (req, res) {
 
 module.exports.registerUser = async (req, res) => {
   try {
-    let { username, email, password } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { username, email, password } = req.validatedBody || req.body;
+
     let existingUser = await userModel.findOne({ email });
     if (existingUser) {
       return res
         .status(400)
         .json({ message: "User with this email already exists" });
-    } else {
-      const salt = await bcrypt.genSalt(10);
-      const hashPassword = await bcrypt.hash(password, salt);
-      let newUser = await userModel.create({
-        username,
-        email,
-        password: hashPassword,
-      });
-      console.log(newUser.password);
-
-      res
-        .status(201)
-        .json({ message: "User registered successfully", user: newUser });
     }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashPassword = await bcrypt.hash(password, salt);
+    let newUser = await userModel.create({
+      username,
+      email,
+      password: hashPassword,
+    });
+
+    const userObj = newUser.toObject();
+    delete userObj.password;
+
+    res.status(201).json({
+      message: "User registered successfully",
+      user: userObj,
+    });
   } catch (error) {
     res
       .status(500)
@@ -68,10 +67,8 @@ module.exports.registerUser = async (req, res) => {
 
 module.exports.loginUser = async (req, res) => {
   try {
-    let { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { email, password } = req.validatedBody || req.body;
+
     let user = await userModel.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
@@ -83,9 +80,13 @@ module.exports.loginUser = async (req, res) => {
           httpOnly: true,
           secure: true,
           sameSite: "strict",
-          maaxAge:  7 * 24 * 60 * 60 * 1000
+          maxAge:  7 * 24 * 60 * 60 * 1000
         });
-        res.status(200).json({ message: "Login successful", token, user });
+
+        const userObj = user.toObject();
+        delete userObj.password;
+
+        res.status(200).json({ message: "Login successful", token, user: userObj });
       } else {
         res.status(400).json({ message: "Invalid email or password" });
       }

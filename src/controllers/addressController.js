@@ -3,19 +3,8 @@ const addressModel = require("../models/address");
 
 module.exports.createAddress = async (req, res) => {
   try {
-    const { fullName, address, city, state, zip, country, phone } = req.body;
-
-    if (
-      !fullName ||
-      !address ||
-      !city ||
-      !state ||
-      !zip ||
-      !country ||
-      !phone
-    ) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { fullName, address, city, state, zip, country, phone } =
+      req.validatedBody || req.body;
 
     const user = await userModel.findById(req.user._id);
     if (!user) {
@@ -40,7 +29,7 @@ module.exports.createAddress = async (req, res) => {
       address: newAddress,
     });
   } catch (error) {
-    e.error("Error creating address:", error);
+    console.error("Error creating address:", error);
     res.status(500).json({
       message: "Internal Server Error",
       error: error.message,

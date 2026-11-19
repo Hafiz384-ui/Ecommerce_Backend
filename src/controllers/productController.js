@@ -144,19 +144,10 @@ module.exports.getWishlistItems = async (req, res) => {
 
 module.exports.addProductToCart = async (req, res) => {
   try {
-    console.log('in add to cart', req.body);
-    const { productId, variantId, quantity, variantMaxQuantity } = req.body;
-    console.log('user in add to cart', req.user);
+    const { productId, variantId, quantity, variantMaxQuantity } =
+      req.validatedBody || req.body;
     
     const userId = req.user._id;
-
-    if (!productId || !variantId || !quantity || !variantMaxQuantity) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Missing required fields (productId, variantId, quantity, variantMaxQuantity)",
-      });
-    }
 
     let cart = await cartModel.findOne({ userId });
 
@@ -335,33 +326,27 @@ module.exports.deleteCartItems = async (req, res) => {
   }
 }
 
-module.exports.orderSummery = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { items } = req.body;
+// module.exports.orderSummery = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { items } = req.body;
 
-    const summary = await SummaryModel.create({
-      user: userId,
-      items,
-      createdAt: new Date(),
-    });
+//     const summary = await SummaryModel.create({
+//       user: userId,
+//       items,
+//       createdAt: new Date(),
+//     });
 
-    res.status(200).json({ success: true, data: summary });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-}
+//     res.status(200).json({ success: true, data: summary });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// }
 
 module.exports.productReview = async (req, res) => {
   try {
     let user = req.user;
-    const { productId, rating, comment } = req.body;
-    if (!productId || !rating || !comment) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID, rating, and comment are required.",
-      });
-    }
+    const { productId, rating, comment } = req.validatedBody || req.body;
 
     let authUser = await userModel.findOne({ _id: user._id });
     if (!authUser) {
@@ -394,7 +379,7 @@ module.exports.productReview = async (req, res) => {
 
     product.numOfReviews = product.reviews.length;
     product.ratings =
-      product.reviews.reduce((acc, item) => item.rating + acc, 0)
+      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
       product.reviews.length;
 
     await product.save({ validateBeforeSave: false });

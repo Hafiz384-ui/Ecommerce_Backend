@@ -3,7 +3,7 @@ const userModel = require("../models/user")
 
 module.exports.createCoupon = async (req, res) => {
   try {
-    const { code, discountValue } = req.body;
+    const { code, discountValue } = req.validatedBody || req.body;
 
     const newCoupon = await couponCodeModel.create({
       code: code.toUpperCase(),
@@ -57,7 +57,7 @@ module.exports.myCoupons = async (req, res) => {
 module.exports.applyCoupon = async (req, res) => {
   try {
     let users = req.user
-    const { code } = req.body;
+    const { code } = req.validatedBody || req.body;
 
     const coupon = await couponCodeModel.findOne({ code: code.toUpperCase() });
     if (!coupon)

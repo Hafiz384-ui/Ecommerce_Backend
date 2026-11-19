@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const uploads = require("../config/multer-config");
 const isLoggedIn = require("../middlewares/isLoggedIn.js");
+const validate = require("../middlewares/validate.js");
+const { checkRole } = require("../middlewares/roleBaseAccess.js");
+const { addToCartSchema, productReviewSchema } = require("../validators/productValidator.js");
 const { createProduct, fetchProduct, getproductById, getproductByCategory, addProductToWishlist, getWishlistItems, addProductToCart, getCartItems, deleteCartItems, orderSummery, productReview } = require("../controllers/productController.js");
-const {checkRole} = require("../middlewares/roleBaseAccess.js")
 
 // Create a new product
 router.post("/createproduct", isLoggedIn , checkRole(['admin']), uploads.array("images", 3), createProduct);
@@ -17,20 +19,21 @@ router.get("/getproduct/:id", getproductById);
 // get products by category
 router.get("/getproductsbycategory/:category", getproductByCategory);
 
-router.get("/addtowishlist/:productid", isLoggedIn, addProductToWishlist);
+router.post("/addtowishlist/:productid", isLoggedIn, addProductToWishlist);
 
 // get wishlist items for logged in user
 router.get("/getwishlist", isLoggedIn, getWishlistItems);
  
 // add to cart route
-router.post("/addtocart", isLoggedIn, addProductToCart);
+router.post("/addtocart", isLoggedIn, validate(addToCartSchema), addProductToCart);
 
 router.get("/cartitems", isLoggedIn, getCartItems);
 
-router.get("/deletecartitems/:id", isLoggedIn, deleteCartItems);
+router.delete("/deletecartitems/:id", isLoggedIn, deleteCartItems);
 
-router.post("/summary", isLoggedIn, orderSummery)
+// router.post("/summary", isLoggedIn, orderSummery);
 
-router.post("/review", isLoggedIn, productReview)
+router.post("/review", isLoggedIn, validate(productReviewSchema), productReview);
 
 module.exports = router;
+

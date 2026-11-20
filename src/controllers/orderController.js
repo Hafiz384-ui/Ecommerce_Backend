@@ -159,19 +159,61 @@ module.exports.createOrder = async (req, res) => {
 module.exports.getOrders = async (req, res) => {
   try {
     const user = req.user;
-    const userOrders = await userModel
-      .findOne({ _id: user._id })
-      .populate("orders")
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 5));
+    const status = req.query.status ? String(req.query.status).trim() : "";
+    const search = req.query.search ? String(req.query.search).trim() : "";
+    const skip = (page - 1) * limit;
+
+    // Build filter query for Order model
+    const query = { userId: user._id };
+
+    // Status filter
+    if (status && status !== "all") {
+      if (status === "active") {
+        query.status = { $in: ["Placed", "Processing", "Shipped"] };
+      } else if (status === "delivered") {
+        query.status = "Delivered";
+      } else if (status === "cancelled") {
+        query.status = "Cancelled";
+      } else {
+        query.status = status;
+      }
+    }
+
+    // Search filter (by order ID or item name)
+    if (search) {
+      const isObjectId = /^[a-f\d]{24}$/i.test(search);
+      if (isObjectId) {
+        query.$or = [{ _id: search }, { "items.name": { $regex: search, $options: "i" } }];
+      } else {
+        query["items.name"] = { $regex: search, $options: "i" };
+      }
+    }
+
+    const totalOrders = await orderModel.countDocuments(query);
+
+    const orders = await orderModel
+      .find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    if (!userOrders) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const totalPages = Math.ceil(totalOrders / limit) || 1;
 
     res.status(200).json({
       success: true,
       message: "Orders fetched successfully",
-      orders: userOrders.orders,
+      orders: orders || [],
+      pagination: {
+        totalOrders,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     });
   } catch (error) {
     console.error("Error fetching orders:", error);

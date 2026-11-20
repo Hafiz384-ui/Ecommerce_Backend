@@ -2,12 +2,14 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
+const cookieParser = require("cookie-parser");
 const productRouter = require("./routes/productRouter");
 const userRouter = require("./routes/userRouter");
 const addressRouter = require("./routes/addressRouter");
-const couponCodeRouter = require("./routes/couponCodeRouter")
-const orderRouter = require("./routes/orderRouter")
-const cookieParser = require("cookie-parser");
+const couponCodeRouter = require("./routes/couponCodeRouter");
+const orderRouter = require("./routes/orderRouter");
+const { apiLimiter } = require("./middlewares/rateLimiter");
+
 // Load environment variables
 dotenv.config();
 
@@ -19,12 +21,16 @@ app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-// Default Route
-app.use("/user", userRouter)
+
+// Apply global rate limiting to all incoming API requests
+app.use(apiLimiter);
+
+// Routes
+app.use("/user", userRouter);
 app.use("/product", productRouter);
-app.use("/address", addressRouter)
-app.use("/order", orderRouter)
-app.use("/coupon", couponCodeRouter)
+app.use("/address", addressRouter);
+app.use("/order", orderRouter);
+app.use("/coupon", couponCodeRouter);
 // Database Connection
 console.log('Connecting to MongoDB...', process.env.MONGO_URL);
 mongoose

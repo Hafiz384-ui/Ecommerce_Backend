@@ -104,6 +104,22 @@ module.exports.logoutUser =  (req, res)=>{
 }
 
 module.exports.fetchMe = async (req, res) => {
-  const user = await userModel.findById(req.user._id).select("-password");
-  res.status(200).json({ user });
-}
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: "Unauthorized User" });
+    }
+
+    const user = await userModel.findById(req.user._id).select("-password").lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};

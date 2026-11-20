@@ -70,28 +70,60 @@ module.exports.getproductById = async (req, res) => {
 
 module.exports.getproductByCategory = async (req, res) => {
   try {
-    let category = req.params.category;
-    let query = {};
-    if (category !== "AllProducts") {
+    const category = req.params.category;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 9));
+    const search = req.query.search ? String(req.query.search).trim() : "";
+    const sort = req.query.sort || "featured";
+
+    // 1. Build Query
+    const query = {};
+    if (category && category !== "AllProducts") {
       query.category = category;
     }
-    const products = await productModel
-      .find(query)
-    if (!products.length) {
-      return res
-        .status(404)
-        .json({ message: "No products found in this category" });
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
     }
-    console.log('product by category...', products);
+
+    // 2. Build Sorting Options
+    let sortOptions = { createdAt: -1 }; // default featured / newest
+    if (sort === "price-low") {
+      sortOptions = { baseprice: 1 };
+    } else if (sort === "price-high") {
+      sortOptions = { baseprice: -1 };
+    } else if (sort === "name-asc") {
+      sortOptions = { name: 1 };
+    }
+
+    // 3. Paginate
+    const paginatedResult = await productModel.paginate(query, {
+      page,
+      limit,
+      sort: sortOptions,
+      populate: "variants",
+      lean: true,
+    });
+
     res.status(200).json({
+      success: true,
       message: "Products fetched successfully",
-      products,
-      count: products.length,
+      products: paginatedResult.docs,
+      pagination: {
+        totalProducts: paginatedResult.totalDocs,
+        totalPages: paginatedResult.totalPages,
+        currentPage: paginatedResult.page,
+        limit: paginatedResult.limit,
+        hasNextPage: paginatedResult.hasNextPage,
+        hasPrevPage: paginatedResult.hasPrevPage,
+        nextPage: paginatedResult.nextPage,
+        prevPage: paginatedResult.prevPage,
+      },
     });
   } catch (error) {
-    res.status(500).json({ message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
-}
+};
 
 module.exports.addProductToWishlist = async (req, res) => {
   try {
@@ -113,7 +145,12 @@ module.exports.addProductToWishlist = async (req, res) => {
       );
       await user.save();
 
-      return res.json({ message: "Product removed from wishlist" });
+      return res.json({
+        success: true,
+        action: "removed",
+        productId: product._id,
+        message: "Product removed from wishlist",
+      });
     }
 
     // Add new wishlist item
@@ -124,23 +161,55 @@ module.exports.addProductToWishlist = async (req, res) => {
     user.wishlist.push(product._id);
     await user.save();
 
-    res.json({ message: "Product added to wishlist", item: newWishListItem });
+    res.json({
+      success: true,
+      action: "added",
+      productId: product._id,
+      product,
+      message: "Product added to wishlist",
+      item: newWishListItem,
+    });
   } catch (error) {
     console.error("Error in wishlist route:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
-}
+};
 
 module.exports.getWishlistItems = async (req, res) => {
   try {
-    const wishlistItems = await wishListModel
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 8));
+    const skip = (page - 1) * limit;
+
+    const totalItems = await wishListModel.countDocuments({ userId: req.user._id });
+
+    const wishlistDocs = await wishListModel
       .find({ userId: req.user._id })
-      .populate("product");
-    res.status(200).json({ message: "Wishlist items fetch successfully" ,wishlistItems: wishlistItems || [] });
+      .populate("product")
+      .sort({ _id: -1 }) // newest saved first
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const totalPages = Math.ceil(totalItems / limit) || 1;
+
+    res.status(200).json({
+      success: true,
+      message: "Wishlist items fetched successfully",
+      wishlistItems: wishlistDocs || [],
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
-}
+};
 
 module.exports.addProductToCart = async (req, res) => {
   try {

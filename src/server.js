@@ -17,8 +17,27 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Allowed origins — localhost dev + production frontend (safe fallback if not set)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  process.env.FRONTEND_URL, // set in Vercel dashboard env vars
+].filter(Boolean); // removes undefined if FRONTEND_URL not set
+
 // Middlewares
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server / Postman requests (no origin header)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -40,4 +59,10 @@ mongoose
   .catch((err) => console.error("MongoDB Connection Error:", err));
 
 // Start Server
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// Vercel serverless mein app.listen() ki zaroorat nahi — VERCEL=1 auto set hota hai
+// Locally (dev/staging/production docker) har case mein listen karega
+if (process.env.VERCEL !== "1") {
+  app.listen(port, () => console.log(`Server running on port ${port}`));
+}
+
+module.exports = app;

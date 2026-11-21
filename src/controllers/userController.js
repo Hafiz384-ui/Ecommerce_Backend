@@ -75,11 +75,12 @@ module.exports.loginUser = async (req, res) => {
     bcrypt.compare(password, user.password, (err, result) => {
       let token = generateToken(user);
       if (result) {
+        const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
         res.cookie("token", token, {
           httpOnly: true,
-          secure: true,
-          sameSite: "strict",
-          maxAge:  7 * 24 * 60 * 60 * 1000
+          secure: isProduction,
+          sameSite: isProduction ? "none" : "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
         const userObj = user.toObject();
@@ -97,10 +98,15 @@ module.exports.loginUser = async (req, res) => {
   }
 }
 
-module.exports.logoutUser =  (req, res)=>{
-    res.clearCookie("token");
-    res.status(200).json({message: "Logout successful"});
-}
+module.exports.logoutUser = (req, res) => {
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+  });
+  res.status(200).json({ message: "Logout successful" });
+};
 
 module.exports.fetchMe = async (req, res) => {
   try {

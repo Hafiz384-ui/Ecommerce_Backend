@@ -3,7 +3,11 @@ const userModel = require("../models/user");
 
 module.exports = async function isLoggedIn(req, res, next) {
   try {
-    const token = req.cookies?.token || req.headers?.cookie?.split(" ")[1]
+    const authHeader = req.headers?.authorization;
+    const bearerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const cookieToken = req.cookies?.token;
+    const token = bearerToken || cookieToken;
+
     if (!token) {
       return res.status(401).json({ message: "unauthorized" });
     }

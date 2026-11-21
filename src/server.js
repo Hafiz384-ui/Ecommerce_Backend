@@ -8,6 +8,7 @@ const userRouter = require("./routes/userRouter");
 const addressRouter = require("./routes/addressRouter");
 const couponCodeRouter = require("./routes/couponCodeRouter");
 const orderRouter = require("./routes/orderRouter");
+const adminRouter = require("./routes/adminRouter");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 
 // Load environment variables
@@ -31,6 +32,7 @@ app.use("/product", productRouter);
 app.use("/address", addressRouter);
 app.use("/order", orderRouter);
 app.use("/coupon", couponCodeRouter);
+app.use("/admin", adminRouter);
 // Database Connection
 console.log('Connecting to MongoDB...', process.env.MONGO_URL);
 mongoose

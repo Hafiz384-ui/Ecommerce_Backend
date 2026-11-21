@@ -7,7 +7,6 @@ module.exports.createAdmin = async function (req, res) {
     const { username, email, password, role } = req.validatedBody || req.body;
 
     let admin = await userModel.find({ role: "admin" });
-    console.log("Creating admin user", admin.length);
     if (admin.length > 0) {
       return res
         .status(403)

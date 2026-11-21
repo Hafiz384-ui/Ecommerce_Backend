@@ -225,6 +225,208 @@ module.exports.getOrders = async (req, res) => {
   }
 };
 
+
+/**
+ * Admin: Get ALL orders across all users with filters, search, sort, and pagination.
+ *
+ * Query Params:
+ *   - page        (number, default 1)
+ *   - limit       (number, default 10, max 100)
+ *   - status      (string) "all" | "Placed" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "active"
+ *   - search      (string) order ObjectId OR customer username/email (partial match)
+ *   - sort        (string) "newest" | "oldest" | "amount-high" | "amount-low"
+ *   - dateFrom    (string) ISO date string — filter orders created on/after this date
+ *   - dateTo      (string) ISO date string — filter orders created on/before this date
+ *   - paymentMethod (string) "COD" etc.
+ */
+module.exports.getAllOrders = async (req, res) => {
+  try {
+    // ── 1. Parse & sanitize query params ────────────────────────────────────
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.max(1, Math.min(100, parseInt(req.query.limit) || 10));
+    const skip   = (page - 1) * limit;
+
+    const status        = req.query.status        ? String(req.query.status).trim()        : "";
+    const search        = req.query.search        ? String(req.query.search).trim()        : "";
+    const sort          = req.query.sort          ? String(req.query.sort).trim()          : "newest";
+    const paymentMethod = req.query.paymentMethod ? String(req.query.paymentMethod).trim() : "";
+    const dateFrom      = req.query.dateFrom      ? String(req.query.dateFrom).trim()      : "";
+    const dateTo        = req.query.dateTo        ? String(req.query.dateTo).trim()        : "";
+
+    // ── 2. Build the base match stage (no userId filter — admin sees all) ────
+    const matchStage = {};
+
+    // Status filter
+    if (status && status !== "all") {
+      if (status === "active") {
+        matchStage.status = { $in: ["Placed", "Processing", "Shipped"] };
+      } else {
+        const validStatuses = ["Placed", "Processing", "Shipped", "Delivered", "Cancelled"];
+        if (validStatuses.includes(status)) {
+          matchStage.status = status;
+        }
+      }
+    }
+
+    // Payment method filter
+    if (paymentMethod) {
+      matchStage.paymentMethod = paymentMethod;
+    }
+
+    // Date range filter (UTC-safe)
+    if (dateFrom || dateTo) {
+      matchStage.createdAt = {};
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        if (!isNaN(from)) matchStage.createdAt.$gte = from;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        if (!isNaN(to)) {
+          to.setHours(23, 59, 59, 999); // include the full end day
+          matchStage.createdAt.$lte = to;
+        }
+      }
+    }
+
+    // Search by Order ObjectId
+    const isObjectId = /^[a-f\d]{24}$/i.test(search);
+    if (search && isObjectId) {
+      matchStage._id = new mongoose.Types.ObjectId(search);
+    }
+
+    // ── 3. Sort stage ────────────────────────────────────────────────────────
+    const sortMap = {
+      newest:      { createdAt: -1 },
+      oldest:      { createdAt:  1 },
+      "amount-high": { totalAmount: -1 },
+      "amount-low":  { totalAmount:  1 },
+    };
+    const sortStage = sortMap[sort] || { createdAt: -1 };
+
+    // ── 4. Aggregation pipeline ──────────────────────────────────────────────
+    // We use aggregation so we can join user info and filter by user name/email
+    // in a single efficient round-trip.
+    const pipeline = [
+      // Stage 1: Filter orders by status / date / id
+      { $match: matchStage },
+
+      // Stage 2: Join with users collection to get customer info
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "customer",
+          pipeline: [
+            { $project: { username: 1, email: 1, _id: 1 } }, // only needed fields
+          ],
+        },
+      },
+
+      // Stage 3: Flatten the customer array into an object
+      { $addFields: { customer: { $arrayElemAt: ["$customer", 0] } } },
+
+      // Stage 4: Search by customer username / email (text partial match)
+      ...(search && !isObjectId
+        ? [
+            {
+              $match: {
+                $or: [
+                  { "customer.username": { $regex: search, $options: "i" } },
+                  { "customer.email":    { $regex: search, $options: "i" } },
+                  { "items.name":        { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      // Stage 5: Run count and paginated data in parallel
+      {
+        $facet: {
+          metadata: [{ $count: "totalOrders" }],
+          orders: [
+            { $sort: sortStage },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                status: 1,
+                totalAmount: 1,
+                discountAmount: 1,
+                paymentMethod: 1,
+                shippingAddress: 1,
+                deliveryDate: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                items: 1,
+                // Customer summary (not sensitive)
+                "customer._id": 1,
+                "customer.username": 1,
+                "customer.email": 1,
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    const [result] = await orderModel.aggregate(pipeline);
+
+    const totalOrders = result?.metadata?.[0]?.totalOrders ?? 0;
+    const orders      = result?.orders ?? [];
+    const totalPages  = Math.ceil(totalOrders / limit) || 1;
+
+    // ── 5. Summary stats (cheap extra counts using same match) ───────────────
+    const [stats] = await orderModel.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          totalRevenue:   { $sum: "$totalAmount" },
+          placedCount:    { $sum: { $cond: [{ $eq: ["$status", "Placed"] },      1, 0] } },
+          processingCount:{ $sum: { $cond: [{ $eq: ["$status", "Processing"] },  1, 0] } },
+          shippedCount:   { $sum: { $cond: [{ $eq: ["$status", "Shipped"] },     1, 0] } },
+          deliveredCount: { $sum: { $cond: [{ $eq: ["$status", "Delivered"] },   1, 0] } },
+          cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "Cancelled"] },   1, 0] } },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "All orders fetched successfully",
+      orders,
+      pagination: {
+        totalOrders,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      stats: stats
+        ? {
+            totalRevenue:    stats.totalRevenue    ?? 0,
+            placedCount:     stats.placedCount     ?? 0,
+            processingCount: stats.processingCount ?? 0,
+            shippedCount:    stats.shippedCount    ?? 0,
+            deliveredCount:  stats.deliveredCount  ?? 0,
+            cancelledCount:  stats.cancelledCount  ?? 0,
+          }
+        : null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+
 /**
  * Controller for updating order status
 */

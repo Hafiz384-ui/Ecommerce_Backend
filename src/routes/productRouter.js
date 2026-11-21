@@ -19,13 +19,13 @@ router.get("/getproduct/:id", getproductById);
 // get products by category
 router.get("/getproductsbycategory/:category", getproductByCategory);
 
-router.post("/addtowishlist/:productid", isLoggedIn, addProductToWishlist);
+router.post("/addtowishlist/:productid", isLoggedIn, checkRole(['customer']),  addProductToWishlist);
 
 // get wishlist items for logged in user
 router.get("/getwishlist", isLoggedIn, getWishlistItems);
  
 // add to cart route
-router.post("/addtocart", isLoggedIn, validate(addToCartSchema), addProductToCart);
+router.post("/addtocart", isLoggedIn, checkRole(['customer']), validate(addToCartSchema), addProductToCart);
 
 router.get("/cartitems", isLoggedIn, getCartItems);
 

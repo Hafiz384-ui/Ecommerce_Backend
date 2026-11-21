@@ -10,7 +10,7 @@ router.post("/createcoupon", isLoggedIn, checkRole(['admin']), validate(createCo
 
 router.get("/mycoupons", isLoggedIn, myCoupons);
 
-router.post("/applycoupon", isLoggedIn, validate(applyCouponSchema), applyCoupon);
+router.post("/applycoupon", isLoggedIn, validate(applyCouponSchema), checkRole(['customer']), applyCoupon);
 
 module.exports = router;
 

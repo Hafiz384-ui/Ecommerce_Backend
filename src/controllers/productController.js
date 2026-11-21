@@ -313,7 +313,6 @@ module.exports.getCartItems = async (req, res) => {
       const product = item.productId;
 
       if (!product?._id) {
-        console.log(" Product missing for item:", item);
         continue;
       }
 
@@ -379,7 +378,6 @@ module.exports.deleteCartItems = async (req, res) => {
       });
     }
     cart.items = cart.items.filter((item) => item._id.toString() !== itemId);
-    console.log("delete items..", cart.items);
     await cart.save();
     res
       .status(200)

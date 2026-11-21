@@ -85,7 +85,6 @@ const createOrderSchema = Joi.object({
  * On success → calls next() with validated (cleaned) data on req.validatedBody.
  */
 const validate = (schema) => (req, res, next) => {
-  console.log('validate addres', req.body)
   const { error, value } = schema.validate(req.body, {
     abortEarly: true,     // stop at first error (keeps messages clean)
     stripUnknown: false,  // keep extra fields (addresses may have _id etc.)

@@ -34,7 +34,6 @@ app.use("/order", orderRouter);
 app.use("/coupon", couponCodeRouter);
 app.use("/admin", adminRouter);
 // Database Connection
-console.log('Connecting to MongoDB...', process.env.MONGO_URL);
 mongoose
   .connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB Connected Successfully"))

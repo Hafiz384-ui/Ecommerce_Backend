@@ -45,6 +45,10 @@ app.use(cookieParser());
 // Apply global rate limiting to all incoming API requests
 app.use(apiLimiter);
 
+app.get('/', (req, res)=>{
+  res.send('server is running in the production.')
+})
+
 // Routes
 app.use("/user", userRouter);
 app.use("/product", productRouter);
